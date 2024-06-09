@@ -1,0 +1,494 @@
+#!/usr/bin/env python
+import os
+import argparse
+import math
+import subprocess
+import json
+import csv
+import sys
+import signal
+from geopy.distance import distance
+from geopy.geocoders import Nominatim
+from tabulate import tabulate
+import folium
+
+callsign = 'W5ALC'
+# Define default values for point one. Comment these lines out to disable defaults.
+DEFAULT_LATITUDE = 38.23941188  # Example default latitude
+DEFAULT_LONGITUDE = -104.64175332  # Example default longitude
+DEFAULT_ALTITUDE = 4823.1  # Example default altitude in feet
+
+def is_termux():
+    return 'com.termux' in os.getenv('PREFIX', '')
+
+def display_help():
+    help_text = """
+    CQ-Sota Help Section
+
+    This program calculates the distance, altitude change, azimuth, and heading
+    between your location and any SOTA (Summits on the Air) summit. Additionally,
+    you can use this tool to map any two points on Earth, not limited to SOTA summits.
+
+    Usage:
+    - To chase a summit: Select 'c' and follow the prompts.
+    - To activate a summit: Select 'a' and follow the prompts.
+    - To view this help section: Select 'h'.
+    - To exit the program: Select 'q'.
+
+    Commands:
+    - c: Chase a SOTA summit
+        1. Enter your location or use Termux location if available.
+        2. Enter the callsign of the operator.
+        3. Search for the SOTA summit by name or summit code.
+        4. Optionally, enter coordinates manually if the summit is not found.
+        5. View the calculated distance, altitude change, azimuth, and heading.
+        6. Optionally, save the results to a log file.
+
+        Bonus: If you mainly chase summits from home, you can set your home location
+        as the default. To do this:
+            1. Open the script file in a text editor.
+            2. Find the section of the code that looks like this:
+
+              # Define default values for point one. Comment these lines out to disable defaults.
+              #DEFAULT_LATITUDE = 40.7128  # Example default latitude
+              #DEFAULT_LONGITUDE = -74.0060  # Example default longitude
+              #DEFAULT_ALTITUDE = 33  # Example default altitude in feet
+
+            3. Uncomment the lines by removing the '#' at the beginning of each line:
+
+              # Define default values for point one. Comment these lines out to disable defaults.
+              DEFAULT_LATITUDE = 40.7128  # Example default latitude
+              DEFAULT_LONGITUDE = -74.0060  # Example default longitude
+              DEFAULT_ALTITUDE = 33  # Example default altitude in feet
+
+            4. Replace the example coordinates with your actual home coordinates and elevation.
+            5. Save the changes and run the script. Your home location will now be used
+               as the default location for chasing summits
+               ( if termux-location is not available )
+
+    - a: Activate a SOTA summit
+        1. Search for the summit you are activating by name or summit code.
+        2. Enter the callsign of the operator.
+        3. Search for another SOTA summit or enter coordinates manually.
+        4. View the calculated distance, altitude change, azimuth, and heading.
+        5. Optionally, save the results to a log file.
+
+    - h: Display help.
+
+    Options:
+    - --log, -l: Enable logging to save the results to a log file.
+
+        *** NOTE: To save to the log file, you have to use 'cq-sota -l' or 'cq-sota --log' ***
+
+    Examples:
+    1. Chasing a SOTA Summit:
+       - Select 'c'.
+       - Enter your location or use Termux location.
+       - Enter the operator's callsign. ( e.g. n0call )
+       - Search for the SOTA summit by name or code (e.g. "W6/CC-004")
+         or type 'manual' to enter manually.
+           - Enter name for point 2: N0CALL
+           - Enter Enter coordinates for N0CALL (or 'exit' to quit): 28.98099,82.9819399
+           - Enter altitude for N0CALL in feet: 36
+       - View the results and optionally save them to a log file.
+
+    2. Activating a SOTA Summit:
+       - Select 'a'.
+       - Search for the summit you are activating. (e.g. "W6/CC-004")
+       - Enter the operator's callsign.
+       - Search for another summit or enter coordinates manually.
+       - View the results and optionally save them to a log file.
+
+    Additional Use Cases:
+
+    - Termux Location Integration: If Termux is installed, the program can
+      automatically fetch your current location.
+    - Manual Location Entry: If Termux is not installed or if you prefer, you
+      can manually enter your location coordinates.
+    - Summits Not in the List: If a SOTA summit is not found in the CSV file, you
+      can enter its coordinates manually to proceed with the calculations.
+    - Viewing Results: After performing the calculations, the results will be
+      displayed on the screen, showing the distance, altitude change, azimuth,
+      and heading between your location and the selected summit.
+    - Saving Results: You have the option to save the results to a log file for
+      future reference. Use the --log or -l option when running cq-sota to enable logging.
+
+
+    Note: This program is fully functional offline, as it uses an offline CSV file
+    containing all SOTA summits. You can operate the program in remote locations
+    without an active internet connection.
+    """
+    print(help_text)
+
+def log_details(filename, data):
+    log_path = os.path.expanduser("/data/data/com.termux/files/home/.config/sota/sota.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, 'a') as log_file:
+        log_file.write(data + '\n')
+
+def get_termux_location():
+    try:
+        result = subprocess.run(['termux-location'], capture_output=True, text=True)
+        if result.returncode == 0:
+            location_data = json.loads(result.stdout.strip())
+            latitude = location_data.get('latitude')
+            longitude = location_data.get('longitude')
+            altitude_meters = location_data.get('altitude')
+            if latitude is not None and longitude is not None and altitude_meters is not None:
+                altitude_feet = altitude_meters * 3.28084  # Convert meters to feet
+                return latitude, longitude, altitude_feet
+    except Exception as e:
+        print(f" ")
+
+    # Check if default values are defined
+    if 'DEFAULT_LATITUDE' in globals() and 'DEFAULT_LONGITUDE' in globals() and 'DEFAULT_ALTITUDE' in globals():
+        return DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ALTITUDE
+
+    return None, None, None
+
+def extract_data_from_csv(csv_file_path):
+    try:
+        extracted_data = []
+        with open(csv_file_path, mode='r', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                try:
+                    peak_designator = row['SummitCode']
+                    summit_name = row['SummitName']
+                    height_meters = int(row['AltM'])
+                    height_ft = int(row['AltFt'])
+                    latitude = float(row['Latitude'])
+                    longitude = float(row['Longitude'])
+                    extracted_data.append([peak_designator, summit_name, height_meters, height_ft, latitude, longitude])
+                except KeyError as e:
+                    print(f"Missing expected column in CSV: {e}")
+                except ValueError as e:
+                    print(f"Error processing row data: {e}")
+        return extracted_data
+    except FileNotFoundError:
+        print("Error: CSV file not found.")
+    except Exception as e:
+        print(f"Error extracting data from CSV: {e}")
+    return []
+
+def plot_folium_map(lat1, lon1, lat2, lon2, filename, info1, info2, distance12, azimuth12, heading12):
+    if lon1 < 0:
+        lon1 += 360
+    if lon2 < 0:
+        lon2 += 360
+
+    midpoint_lat = (lat1 + lat2) / 2
+    midpoint_lon = (lon1 + lon2) / 2
+    map = folium.Map(location=[midpoint_lat, midpoint_lon], zoom_start=6, tiles="cartodb positron")
+
+    if distance12 > 0.5 * (2 * math.pi * 6371):  # Half the circumference of Earth in km
+        azimuth12 = calculate_inverse_azimuth(azimuth12)
+
+    popup1 = folium.Popup(f"{info1}<br>Distance to {info2}: {distance12:.1f} Mi<br>Azimuth: {azimuth12:.1f} °<br>Heading: {heading12}", max_width=300)
+    folium.Marker([lat1, lon1], popup=popup1, icon=folium.Icon(color='red')).add_to(map)
+
+    inverse_azimuth = calculate_inverse_azimuth(azimuth12)
+    inverse_heading = calculate_heading(inverse_azimuth)
+    popup2 = folium.Popup(f"{info2}<br>Distance to {info1}: {distance12:.1f} Mi<br>Azimuth: {inverse_azimuth:.1f} °<br>Heading: {inverse_heading}", max_width=300)
+    folium.Marker([lat2, lon2], popup=popup2, icon=folium.Icon(color='blue')).add_to(map)
+
+    # Adjust the polyline if crossing the International Date Line
+    if abs(lon1 - lon2) > 180:
+        if lon1 < lon2:
+            lon1 += 360
+        else:
+            lon2 += 360
+
+    folium.PolyLine(locations=[[lat1, lon1], [lat2, lon2]], color='black').add_to(map)
+
+    map.save(filename)
+    print(f"Map saved as {filename}")
+
+
+def search_peak(extracted_data, search_term):
+    return [data for data in extracted_data if search_term.lower() in data[0].lower() or search_term.lower() in data[1].lower()]
+
+def get_coordinates(input_str, geolocator):
+    while True:
+        input_data = input(f"Enter {input_str} (or 'exit' to quit): ")
+        if input_data.lower() == 'exit':
+            return None, None
+        if ',' in input_data:
+            try:
+                lat, lon = map(float, input_data.split(','))
+                return lat, lon
+            except ValueError:
+                print("Invalid coordinates format. Please try again.")
+        else:
+            location = geolocator.geocode(input_data)
+            if location:
+                return location.latitude, location.longitude
+            else:
+                print("Location not found. Please enter a valid address.")
+
+def calculate_azimuth(lat1, lon1, lat2, lon2):
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    dlon = lon2 - lon1
+    y = math.sin(dlon) * math.cos(lat2)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    azimuth_rad = math.atan2(y, x)
+    azimuth_deg = math.degrees(azimuth_rad)
+    return (azimuth_deg + 360) % 360
+
+def calculate_inverse_azimuth(azimuth):
+    return (azimuth + 180) % 360
+
+def calculate_heading(azimuth):
+    directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+    heading_index = round((azimuth % 360) / 22.5) % 16
+    return directions[heading_index]
+
+def format_location(name, lat, lon, altitude):
+    return f"{name}: {lat}, {lon} (Altitude: {altitude:.1f} feet)"
+
+def signal_handler(sig, frame):
+    print("\nExiting program.")
+    sys.exit(0)
+
+def main():
+    signal.signal(signal.SIGINT, signal_handler)
+
+    print("Welcome to CQ-Sota!")
+    print("This program is designed to calculate the \ndistance, altitude change, azimuth, and heading \nbetween your location and ANY SOTA Summit.")
+
+
+    if is_termux():
+        config_path = os.path.expanduser('/data/data/com.termux/files/home/.config/sota/')
+        map_save_path = '/storage/emulated/0/'
+    else:
+        config_path = os.path.expanduser('~/.config/sota/')
+        map_save_path = os.path.expanduser('~/')
+
+    os.makedirs(config_path, exist_ok=True)
+
+    choice = input("Do you want to chase (c), activate (a), or get help (h) for a SOTA summit? ").lower()
+    if choice not in ['c', 'a', 'h']:
+        print("Invalid choice. Exiting program.")
+        return
+
+    if choice == 'h':
+        display_help()
+        return
+
+    geolocator = Nominatim(user_agent="my_geocoder")
+    csv_file_path = os.path.join(config_path, 'SOTA_Summits_List.csv')
+    extracted_data = extract_data_from_csv(csv_file_path)
+
+    if not extracted_data:
+        print("No data extracted from the CSV.")
+        return
+
+    enable_logging = '-l' in sys.argv or '--log' in sys.argv
+    log_path = os.path.join(config_path, 'sota.log')
+
+    if choice == 'c':
+        # Chase logic
+        name1 = "QTH"
+        lat1, lon1, alt1 = get_termux_location()
+        if lat1 is None or lon1 is None or alt1 is None:
+            if 'DEFAULT_LATITUDE' in globals() and 'DEFAULT_LONGITUDE' in globals() and 'DEFAULT_ALTITUDE' in globals():
+                lat1, lon1, alt1 = DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ALTITUDE
+            else:
+                name1 = input("Enter name for point 1: ")
+                lat1, lon1 = get_coordinates(f" Enter coordinates for {name1}: ", geolocator)
+                if lat1 is None or lon1 is None:
+                    print("Exiting program.")
+                    return
+                alt1 = input(f"Enter altitude for {name1} in feet: ")
+                try:
+                    alt1 = float(alt1)
+                except ValueError:
+                    print("Invalid altitude input. Exiting program.")
+                    return
+
+        while True:
+            log_callsign = input("Enter callsign of operator: ").upper()
+            search_term = input("Enter search term for the SOTA summit you're chasing \n(or 'manual' to enter coordinates manually): ")
+            if search_term.lower() == 'manual':
+                name2 = input("Enter name for point 2: ")
+                lat2, lon2 = get_coordinates(f"Enter coordinates for {name2}", geolocator)
+                if lat2 is None or lon2 is None:
+                    print("Exiting program.")
+                    return
+                alt2 = input(f"Enter altitude for {name2} in feet: ")
+                try:
+                    alt2 = float(alt2)
+                except ValueError:
+                    print("Invalid altitude input. Exiting program.")
+                    return
+                break
+            else:
+                search_results = search_peak(extracted_data, search_term)
+                if not search_results:
+                    print("No matching peaks found.")
+                    continue
+
+                print("Search Results:")
+                for idx, result in enumerate(search_results):
+                    print(f"{idx + 1}. {result[1]} - {result[0]} {result[4]}, {result[5]}")
+
+                try:
+                    choice = int(input("Select the SOTA summit by number: ")) - 1
+                    if choice < 0 or choice >= len(search_results):
+                        raise ValueError("Invalid choice.")
+                    selected_summit = search_results[choice]
+                    name2 = selected_summit[1]
+                    lat2, lon2 = selected_summit[4], selected_summit[5]
+                    alt2 = selected_summit[3]
+                    break
+                except ValueError:
+                    print("Invalid input. Please try again.")
+                    continue
+
+        distance12 = distance((lat1, lon1), (lat2, lon2)).miles
+        altitude_change12 = (alt2 - alt1)
+        azimuth12 = calculate_azimuth(lat1, lon1, lat2, lon2)
+        heading12 = calculate_heading(azimuth12)
+
+        distance21 = distance12
+        altitude_change21 = (alt1 - alt2)
+        azimuth21 = calculate_inverse_azimuth(azimuth12)
+        heading21 = calculate_heading(azimuth21)
+
+        table_data = [
+            [f"{log_callsign}", f"{name1} -> {name2}", f"{name2} -> {name1}"],
+            ["Distance", f"{distance12:.1f} Mi", f"{distance21:.1f} Mi"],
+            ["Altitude Change", f"{altitude_change12:.1f} Ft", f"{altitude_change21:.1f} Ft"],
+            ["Azimuth", f"{azimuth12:.1f} °", f"{azimuth21:.1f} °"],
+            ["Heading", heading12, heading21]
+        ]
+
+        print("\n")
+        info1 = format_location(name1, lat1, lon1, alt1)
+        info2 = format_location(name2, lat2, lon2, alt2)
+        print(info1)
+        print(info2)
+        print(tabulate(table_data, headers="firstrow", tablefmt="pretty"))
+
+        if enable_logging:
+            log_data = f"{info1}\n{info2}\n{tabulate(table_data, headers='firstrow', tablefmt='plain')}\n"
+            log_details(log_path, log_data)
+
+        filename = os.path.join(map_save_path, f"{callsign}-QTH_to_{name2.replace(' ', '_').replace('/', '-')}-{log_callsign}.html")
+        plot_folium_map(lat1, lon1, lat2, lon2, filename, info1, info2, distance12, azimuth12, heading12)
+
+    elif choice == 'a':
+        # Activate logic
+        while True:
+            search_term = input("Enter search term for the SOTA summit you are activating (or 'exit' to quit): ")
+            if search_term.lower() == 'exit':
+                print("Exiting program.")
+                return
+            search_results = search_peak(extracted_data, search_term)
+            if not search_results:
+                print("No matching peaks found.")
+                continue
+            print("Search Results:")
+            for idx, result in enumerate(search_results):
+                print(f"{idx + 1}. {result[1]} - {result[0]} {result[4]}, {result[5]}")
+
+            try:
+                choice = int(input("Select the SOTA summit by number: ")) - 1
+                if choice < 0 or choice >= len(search_results):
+                    raise ValueError("Invalid choice.")
+                selected_summit = search_results[choice]
+                summit_name = selected_summit[1]
+                summit_code = selected_summit[0]
+                lat1, lon1 = selected_summit[4], selected_summit[5]
+                alt1 = selected_summit[3]
+                break
+            except ValueError:
+                print("Invalid input. Please try again.")
+                continue
+
+        while True:
+            log_callsign = input("Enter callsign of operator: ").upper()
+            point2_option = input("Enter 's' to search for a SOTA peak for point 2, \nor 'm' to enter coordinates manually: ").lower()
+            if point2_option == 's':
+                while True:
+                    search_term = input("Enter search term for the SOTA summit (or 'exit' to quit): ")
+                    if search_term.lower() == 'exit':
+                        print("Exiting program.")
+                        return
+                    search_results = search_peak(extracted_data, search_term)
+                    if not search_results:
+                        print("No matching peaks found.")
+                        continue
+                    print("Search Results:")
+                    for idx, result in enumerate(search_results):
+                        print(f"{idx + 1}. {result[1]} - {result[0]} {result[4]}, {result[5]}")
+
+                    try:
+                        choice = int(input("Select the SOTA summit by number: ")) - 1
+                        if choice < 0 or choice >= len(search_results):
+                            raise ValueError("Invalid choice.")
+                        selected_summit = search_results[choice]
+                        summit_name2 = selected_summit[1]
+                        summit_code2 = selected_summit[0]
+                        lat2, lon2 = selected_summit[4], selected_summit[5]
+                        alt2 = selected_summit[3]
+                        break
+                    except ValueError:
+                        print("Invalid input. Please try again.")
+                        continue
+            elif point2_option == 'm':
+                summit_name2 = input("Enter name for point 2: ").title()
+                summit_code2 = input(f"Enter city/location for {summit_name2}: ").title()
+                lat2, lon2 = get_coordinates(f"coordinates for {summit_name2}: ", geolocator)
+                if lat2 is None or lon2 is None:
+                    print("Exiting program.")
+                    return
+                alt2 = input(f"Enter altitude for {summit_name2} in feet: ")
+                try:
+                    alt2 = float(alt2)
+                except ValueError:
+                    print("Invalid altitude input. Please try again.")
+                    continue
+            else:
+                print("Invalid option. Please enter 's' or 'm'.")
+                continue
+
+            distance12 = distance((lat1, lon1), (lat2, lon2)).miles
+            altitude_change12 = (alt2 - alt1)
+            azimuth12 = calculate_azimuth(lat1, lon1, lat2, lon2)
+            heading12 = calculate_heading(azimuth12)
+
+            distance21 = distance12
+            altitude_change21 = (alt1 - alt2)
+            azimuth21 = calculate_inverse_azimuth(azimuth12)
+            heading21 = calculate_heading(azimuth21)
+
+            table_data = [
+                [f"{log_callsign}", f"{summit_name} ({summit_code}) \n-> {summit_name2} ({summit_code2})", f"{summit_name2} ({summit_code2}) \n-> {summit_name} ({summit_code})"],
+                ["Distance", f"{distance12:.1f} Mi", f"{distance21:.1f} Mi"],
+                ["Altitude Change", f"{altitude_change12:.1f} Ft", f"{altitude_change21:.1f} Ft"],
+                ["Azimuth", f"{azimuth12:.1f} °", f"{azimuth21:.1f} °"],
+                ["Heading", heading12, heading21]
+            ]
+
+            print("\n")
+            info1 = format_location(f"{summit_name} ({summit_code})", lat1, lon1, alt1)
+            info2 = format_location(f"{summit_name2} ({summit_code2})", lat2, lon2, alt2)
+            print(info1)
+            print(info2)
+            print(tabulate(table_data, headers="firstrow", tablefmt="pretty"))
+
+            filename = os.path.join(map_save_path, f"{summit_name.replace(' ', '_').replace('/', '-')}_to_{summit_name2.replace(' ', '_').replace('/', '-')}-{log_callsign}.html")
+            plot_folium_map(lat1, lon1, lat2, lon2, filename, info1, info2, distance12, azimuth12, heading12)
+
+            if enable_logging:
+                log_data = f"{info1}\n{info2}\n{tabulate(table_data, headers='firstrow', tablefmt='plain')}\n"
+                log_details(log_path, log_data)
+
+            option = input("Do you want to log another? (yes/no): ").lower()
+            if option != 'yes':
+                print("Exiting program.")
+                return
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,114 @@
+### Introduction
+
+This script is designed to calculate the distance, altitude change, azimuth, and heading between your location and any Summits on the Air (SOTA) summit. It uses the Termux environment on Android devices and provides visual maps using the Folium library.
+
+### Prerequisites
+
+1. **Python Environment:** Ensure you have Python 3.x installed.
+2. **Termux Environment (Optional):** This script is optimized for Termux, a terminal emulator for Android. However, it can also run on standard Linux distributions.
+3. **Required Python Libraries:** The script requires several Python libraries, which can be installed via pip.
+
+### Step-by-Step Installation
+
+#### 1. **Install Termux (Optional)**
+
+If you are using an Android device, install Termux from the [Githib Repository](https://github.com/termux/termux-app/releases/download/v0.118.0/termux-app_v0.118.0+github-debug_universal.apk) or [F-Droid](https://f-droid.org/repo/com.termux_118.apk).
+
+#### 2. **Install Python and pip**
+
+Open Termux (or your terminal) and install Python and pip:
+
+```bash
+pkg install python
+```
+
+#### 3. **Install Required Python Libraries**
+
+Install the necessary libraries using pip:
+
+```bash
+pip install argparse subprocess json csv sys signal geopy tabulate folium
+```
+
+#### 4. **Download the Script**
+
+Save the provided script to a file named `cq_sota.py` in your preferred directory. For example, in Termux:
+
+```bash
+mkdir -p ~/bin
+```
+
+Paste the script into the `nano` editor and save it (Ctrl + X, then Y and Enter).
+
+#### 5. **Set Up Configuration and Data Files**
+
+Create the necessary configuration and data directories:
+
+```bash
+mkdir -p ~/.config/sota
+```
+
+Place your CSV file containing SOTA summit data in the configuration directory. For example, name it `SOTA_Summits_List.csv` and place it in `~/.config/sota/`.
+
+### Usage Instructions
+
+#### 1. **Running the Script**
+
+To execute the script, run:
+
+```bash
+python ~/scripts/cq_sota.py
+```
+
+#### 2. **Script Workflow**
+
+Upon running the script, follow these steps:
+
+1. **Welcome Message:** The script will display a welcome message and ask if you want to chase (c) or activate (a) a SOTA summit.
+
+2. **User Location (Chase Mode):**
+   - If chasing a summit, the script will attempt to get your location using Termux (`termux-location`).
+   - If location retrieval fails, you can manually input your coordinates and altitude.
+   
+3. **Summit Search (Chase Mode):**
+   - Enter the callsign of the operator.
+   - Enter the search term for the SOTA summit. The script will search for summits based on your input.
+   - If you choose to enter coordinates manually, provide the latitude, longitude, and altitude.
+
+4. **Summit Search (Activate Mode):**
+   - Enter the search term for the summit you are activating.
+   - Select the summit from the search results.
+   - Enter the callsign of the operator.
+   - Choose to search for another summit or manually enter coordinates for the second point.
+
+5. **Calculations and Output:**
+   - The script will calculate the distance, altitude change, azimuth, and heading between the two points.
+   - It will display the information in a tabulated format and save the map as an HTML file.
+
+6. **Logging:**
+   - If logging is enabled (`-l` or `--log`), the script will log details to `~/.config/sota/sota.log`.
+
+#### 3. **Example Execution**
+
+**Chase Mode Example:**
+
+1. Run the script.
+2. Choose `c` for chasing a summit.
+3. Enter operator callsign: `N0CALL`.
+4. Search term for the SOTA summit: `Pikes Peak`.
+5. Select the summit from the list (e.g., 1).
+6. View the calculated details and open the saved map (HTML file).
+
+**Activate Mode Example:**
+
+1. Run the script.
+2. Choose `a` for activating a summit.
+3. Enter the search term for the activating summit: `Mt. Everest`.
+4. Select the summit from the list (e.g., 1).
+5. Enter operator callsign: `N0CALL`.
+6. Choose to search for another SOTA peak or manually enter coordinates for the second point.
+7. View the calculated details and open the saved map (HTML file).
+
+### Conclusion
+
+This script is a powerful tool for SOTA enthusiasts, providing detailed geographical calculations and visual maps for better planning and coordination. By following the installation and usage instructions, you can leverage this script to enhance your SOTA chasing and activating experience.
