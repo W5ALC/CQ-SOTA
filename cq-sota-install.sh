@@ -38,8 +38,7 @@ done
 
 # Install pv if not already installed
 if ! dpkg -s pv >/dev/null 2>&1; then
-    pkg install -y pv
-    if [ $? -ne 0 ]; then
+    if ! pkg install -y pv; then
         ryt "Error: Failed to install pv.\n"
         exit 1
     fi
@@ -47,8 +46,7 @@ fi
 
 # Install curl if not already installed
 if ! dpkg -s curl >/dev/null 2>&1; then
-    pkg install -y curl
-    if [ $? -ne 0 ]; then
+    if ! pkg install -y curl; then
         ryt "Error: Failed to install curl.\n"
         exit 1
     fi
@@ -56,15 +54,13 @@ fi
 
 # Update and upgrade existing packages, then install required packages
 ryt "Updating package lists and upgrading existing packages. This may take a few minutes...\n"
-pkg update -y && pkg upgrade -y
-if [ $? -ne 0 ]; then
+if ! pkg update -y && pkg upgrade -y; then
     ryt "Error: Failed to update or upgrade packages.\n"
     exit 1
 fi
 
 ryt "Installing required packages: curl and python...\n"
-pkg install -y termux-api python libgeos python-numpy
-if [ $? -ne 0 ]; then
+if ! pkg install -y termux-api python libgeos python-numpy; then
     ryt "Error: Failed to install required packages.\n"
     exit 1
 fi
@@ -74,8 +70,7 @@ sleep 3
 
 # Install necessary Python packages
 ryt "Installing necessary Python packages: geopy, tabulate, folium...\n"
-pip install geopy tabulate folium
-if [ $? -ne 0 ]; then
+if ! pip install geopy tabulate folium; then
     ryt "Error: Failed to install necessary Python packages.\n"
     exit 1
 fi
@@ -85,8 +80,7 @@ sleep 3
 
 # Create the 'bin' directory if it doesn't exist
 ryt "Creating the 'bin' directory in your home directory to store scripts...\n"
-mkdir -p ~/bin
-if [ $? -ne 0 ]; then
+if ! mkdir -p ~/bin; then
     ryt "Error: Failed to create the 'bin' directory.\n"
     exit 1
 fi
@@ -98,7 +92,7 @@ if ! grep -q "export PATH=\$PATH:~/bin" "$PREFIX/etc/bash.bashrc"; then
     ryt "Adding ~/bin to your PATH for easier script execution...\n"
     printf "export PATH=\$PATH:~/bin\n" >> "$PREFIX/etc/bash.bashrc"
     source "$PREFIX/etc/bash.bashrc"
-    if [ $? -ne 0 ]; then
+    if ! source "$PREFIX/etc/bash.bashrc"; then
         ryt "Error: Failed to add ~/bin to your PATH.\n"
         exit 1
     fi
@@ -110,8 +104,7 @@ sleep 2
 
 # Download the cq-sota script and save it to ~/bin
 ryt "Downloading the cq-sota script, which calculates SOTA summit details...\n"
-curl -s https://gist.githubusercontent.com/W5ALC/607855b995374c505732a9d07349f124/raw/52d98d231853ca700f86b15270628aab9f88d2cd/cq-sota > ~/bin/cq-sota
-if [ $? -ne 0 ]; then
+if ! curl -s https://gist.githubusercontent.com/W5ALC/607855b995374c505732a9d07349f124/raw/52d98d231853ca700f86b15270628aab9f88d2cd/cq-sota > ~/bin/cq-sota; then
     ryt "Error: Failed to download the cq-sota script.\n"
     exit 1
 fi
@@ -120,8 +113,7 @@ sleep 2
 
 # Make the cq-sota script executable
 ryt "Making the cq-sota script executable...\n"
-chmod +x ~/bin/cq-sota
-if [ $? -ne 0 ]; then
+if ! chmod +x ~/bin/cq-sota; then
     ryt "Error: Failed to make the cq-sota script executable.\n"
     exit 1
 fi
@@ -130,8 +122,7 @@ sleep 2
 
 # Create the 'sota' config folder if it doesn't exist
 ryt "Creating the 'sota' config folder to store configuration files...\n"
-mkdir -p ~/.config/sota
-if [ $? -ne 0 ]; then
+if ! mkdir -p ~/.config/sota; then
     ryt "Error: Failed to create the 'sota' config folder.\n"
     exit 1
 fi
@@ -140,8 +131,7 @@ sleep 2
 
 # Download and process the SOTA Summits List CSV file
 ryt "Downloading the SOTA Summits List CSV file...\n"
-curl -s https://storage.sota.org.uk/summitslist.csv | sed '1d' > ~/.config/sota/SOTA_Summits_List.csv
-if [ $? -ne 0 ]; then
+if ! curl -s https://storage.sota.org.uk/summitslist.csv | sed '1d' > ~/.config/sota/SOTA_Summits_List.csv; then
     ryt "Error: Failed to download and process the CSV file.\n"
     exit 1
 fi
