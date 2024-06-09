@@ -32,9 +32,9 @@ if [ -z "$TERMUX_VERSION" ]; then
 fi
 
 # Ensure required commands are available
-for cmd in pv pkg curl pip; do
-    check_command "$cmd"
-done
+#for cmd in pv pkg curl pip; do
+#    check_command "$cmd"
+#done
 
 # Install pv if not already installed
 if ! dpkg -s pv >/dev/null 2>&1; then
