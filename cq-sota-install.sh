@@ -18,12 +18,12 @@ ryt () {
 }
 
 # Function to check command existence
-check_command () {
-    if ! command -v "$1" &> /dev/null; then
-        ryt "Error: %s command not found. Please install it first.\n" "$1"
-        exit 1
-    fi
-}
+#check_command () {
+#    if ! command -v "$1" &> /dev/null; then
+#        ryt "Error: %s command not found. Please install it first.\n" "$1"
+#        exit 1
+#    fi
+#}
 
 # Ensure the script is running in Termux
 if [ -z "$TERMUX_VERSION" ]; then
