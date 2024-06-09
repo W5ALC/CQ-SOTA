@@ -1,18 +1,18 @@
-3. Download dependencies: 
-  -download curl python
-     ```
-     pkg update && pkg upgrade && pkg install curl python
-     ```
 
-10. Create the 'bin' Directory and Move the Script:
+
+1. Download dependencies:
+    - Download curl python
+      ```
+      pkg update && pkg upgrade && pkg install curl python
+      ```
+
+2. Create the 'bin' Directory and Move the Script:
     - In the Termux terminal, type:
       ```
       mkdir ~/bin
       ```
 
-    - Press Enter to create the 'bin' directory.
-
-9. Add ~/bin to $PATH:
+3. Add ~/bin to $PATH:
     - In the Termux terminal, type:
       ```
       echo "export PATH=$PATH:~/bin" >> $PREFIX/etc/bash.bashrc && source $PREFIX/etc/bash.bashrc
@@ -45,14 +45,14 @@
       chmod +x ~/bin/cq-sota
       ```
 
-11. Run the Script:
+7. Run the Script:
     - In the Termux terminal, type:
-      ```
-      cq-sota
-      ```
-
+      ```cq-sota```
+    -or to log the output
+      ```cq-sota -l``` or ```cq-sota --log```
+    
     - Press Enter to execute the script.
 
-12. Follow the Instructions:
+8. Follow the Instructions:
     - Follow the prompts to search for a summit and provide location information as needed.
     - The script will calculate various parameters such as distance, altitude change, azimuth, and heading between two geographical locations.
