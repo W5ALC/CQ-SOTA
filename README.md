@@ -19,21 +19,14 @@ CQ-Sota is a tool designed to calculate the distance, altitude change, azimuth, 
 
 ## Installation
 
-1. **Download the script:**
-
-    ```bash
-    git clone https://github.com/w5alc/CQ-SOTA.git
-    cd CQ-SOTA
-    ```
-
-2. **Install the required Python packages:**
+1. **Install the required Python packages:**
 
     ```bash
     pkg install -y termux-api python libgeos python-numpy
     pip install geopy tabulate folium
     ```
 
-3. **Create necessary directories and configure PATH:**
+2. **Create necessary directories and configure PATH:**
 
     ```bash
     mkdir ~/bin
@@ -41,7 +34,7 @@ CQ-Sota is a tool designed to calculate the distance, altitude change, azimuth, 
     mkdir -p ~/.config/sota
     ```
 
-4. **Download and setup the script and CSV file:**
+3. **Download and setup the script and CSV file:**
 
     ```bash
     curl -s https://gist.githubusercontent.com/W5ALC/607855b995374c505732a9d07349f124/raw/e9b38f1f32fd2ec511a16edec148d56bc424df34/cq-sota > ~/bin/cq-sota
@@ -49,7 +42,7 @@ CQ-Sota is a tool designed to calculate the distance, altitude change, azimuth, 
     chmod +x ~/bin/cq-sota
     ```
 
-5. **(Optional) Configure default location:**
+4. **(Optional) Configure default location:**
 
     Open the script file in a text editor and find the section with default values:
 
